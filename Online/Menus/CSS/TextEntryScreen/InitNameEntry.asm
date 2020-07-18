@@ -27,7 +27,7 @@ blrl
 .set DOFST_TEXT_Y_POS_LINE2, DOFST_TEXT_Y_POS_LINE1 + 4
 .float 125
 .set DOFST_TEXT_OPP_STR_X_POS, DOFST_TEXT_Y_POS_LINE2 + 4
-.float -71.5
+.float -105.5
 .set DOFST_TEXT_FONT_SIZE, DOFST_TEXT_OPP_STR_X_POS + 4
 .float 0.35
 
@@ -36,9 +36,9 @@ blrl
 
 # Line Text Strings
 .set DOFST_TEXT_STRING_LINE1, DOFST_TEXT_HIGHLIGHT_COLOR + 4
-.string "Enter your %s above."
-.set DOFST_TEXT_STRING_LINE2, DOFST_TEXT_STRING_LINE1 + 21
-.string "Your opponent will also need to enter yours"
+.string "Enter %s. The opponent"
+.set DOFST_TEXT_STRING_LINE2, DOFST_TEXT_STRING_LINE1 + 23
+.string "should do it too. - to use clipboard on PC."
 .set DOFST_TEXT_STRING_OPP_CONNECT_CODE, DOFST_TEXT_STRING_LINE2 + 44
 .string "opponent's connect code"
 .align 2
