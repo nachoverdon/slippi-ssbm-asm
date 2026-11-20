@@ -28,23 +28,34 @@ backup
 
 # fetch data to use throughout function
 lwz REG_ODB_ADDRESS, OFST_R13_ODB_ADDR(r13) # data buffer address
+cmpwi REG_ODB_ADDRESS, 0
+beq SKIP_RUMBLE
 
-lbz r3, ODB_LOCAL_PLAYER_INDEX(REG_ODB_ADDRESS)
-cmpw r3, REG_RUMBLE_PORT
-beq IS_LOCAL_PLAYER
+# Validate Melee slot index (0..3)
+cmplwi REG_RUMBLE_PORT, 4
+bge SKIP_RUMBLE
 
-# If this rumble instruction is not for the local player, just exit the function
-restore
-branch r12, 0x8034df44
+# Look up physical controller port + 1 (0 = remote/no rumble, 1..4 = controller port 0..3)
+addi r3, REG_ODB_ADDRESS, ODB_RUMBLE_PORT_MAP
+lbzx r3, r3, REG_RUMBLE_PORT
+cmpwi r3, 0
+beq SKIP_RUMBLE
+cmplwi r3, 4
+bgt SKIP_RUMBLE
 
-IS_LOCAL_PLAYER:
-# Set r3 output to the controller port to redirect to
-lbz r3, ODB_INPUT_SOURCE_INDEX(REG_ODB_ADDRESS)
+# Convert port+1 back to 0-based controller port in r3 (preserved across restore)
+subi r3, r3, 1
 
 RESTORE:
 restore
 
 # Move new port output to r29
 mr r29, r3
+b EXIT
+
+SKIP_RUMBLE:
+# If this rumble instruction is not for a local player, just exit PADControlMotor
+restore
+branch r12, 0x8034df44
 
 EXIT:

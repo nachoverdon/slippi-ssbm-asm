@@ -293,7 +293,8 @@
 .set ODB_B_HELD_HISTORY, ODB_DESYNC_RECOVERY_FIGHTER_ARR + DFRE_SIZE * 4 # u8[RNG_HISTORY_COUNT], mask of ports holding B on each frame
 .set ODB_RNG_SEED_BITS_HISTORY, ODB_B_HELD_HISTORY + RNG_HISTORY_COUNT # u8[RNG_HISTORY_COUNT], bits to XOR into the seed on each frame
 .set ODB_IS_LEAVING, ODB_RNG_SEED_BITS_HISTORY + RNG_HISTORY_COUNT # bool, the local player chose to leave the game
-.set ODB_SIZE, ODB_IS_LEAVING + 1
+.set ODB_RUMBLE_PORT_MAP, ODB_IS_LEAVING + 1 # u8[4], indexed by Melee slot; 0 = remote/no rumble, 1..4 = physical port + 1
+.set ODB_SIZE, ODB_RUMBLE_PORT_MAP + 4
 
 .set TXB_CMD, 0 # u8
 .set TXB_FRAME, TXB_CMD + 1 # s32
@@ -396,7 +397,8 @@
 .set MSRB_ALT_STAGE_MODE, MSRB_MATCH_ID + 51 # u8
 .set MSRB_RANKED_PLAYER_INFO, MSRB_ALT_STAGE_MODE + 1 # RPI_SIZE[4], indexed by port
 .set MSRB_IS_BOT, MSRB_RANKED_PLAYER_INFO + RPI_SIZE * 4 # bool[4], indexed by port
-.set MSRB_SIZE, MSRB_IS_BOT + 4
+.set MSRB_LOCAL_RUMBLE_PORTS, MSRB_IS_BOT + 4 # u8[4], indexed by Melee slot; 0 = remote/no rumble, 1..4 = physical port + 1
+.set MSRB_SIZE, MSRB_LOCAL_RUMBLE_PORTS + 4
 
 ################################################################################
 # Rank Info Response Buffer
