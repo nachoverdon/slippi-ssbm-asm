@@ -378,7 +378,96 @@ CSSSceneDecide:
 backup
 mr  REG_MINORSCENE,r3
 
+# A count change rebuilds the same online CSS, never the match splash/SSS.
+# Character picks live in the local coordinator and are restored on scene load.
+loadwz r3, CSSDT_BUF_ADDR
+lbz r4, CSSDT_NATIVE_RELOAD(r3)
+cmpwi r4, 0
+beq CSSSceneDecide_Normal
+li r4, 0
+stb r4, CSSDT_NATIVE_RELOAD(r3)
+load r3, 0x80479d30
+li r4, 1
+stb r4, 0x5(r3) # explicit next CSS: retail stores requested minor + 1
+b CSSSceneDecide_Exit
+CSSSceneDecide_Normal:
+
+# Check native Back before event-mode copying. Only a Slippi-ready handoff
+# may advance native Teams; never send an offline exit to uninitialized SSS.
+loadwz r3, CSSDT_BUF_ADDR
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r3)
+cmpwi r4, 0
+beq CSSSceneDecide_Stock
+lwz r4, 0x14(REG_MINORSCENE)
+lbz r4, 3(r4)
+cmpwi r4, 2
+beq CSSSceneDecide_NativeBack
+lbz r4, -0x49aa(r13)
+cmpwi r4, 2
+beq CSSSceneDecide_NativeBack
+lwz r3, CSSDT_MSRB_ADDR(r3)
+lbz r4, MSRB_IS_LOCAL_PLAYER_READY(r3)
+lbz r3, MSRB_IS_REMOTE_PLAYER_READY(r3)
+and. r3, r3, r4
+beq CSSSceneDecide_NativeRepeat
+b CSSSceneDecide_Stock
+CSSSceneDecide_NativeBack:
+# Clear both native remembered cards and Dolphin's rematch cache only on exit.
+lwz r28, -0x49f0(r13)
+load r29, 0x803F0DFC
+li r26, 4
+CSSSceneDecide_ClearCard:
+li r3, 26
+stb r3, 0x70(r28) # no selected character
+li r3, 25
+stb r3, 0x0e(r29) # no native portrait/icon
+stb r3, 0x0f(r29)
+li r3, 0
+stb r3, 0x73(r28) # costume
+stb r3, 0x79(r28) # team, back to default red
+stb r3, 9(r29) # selected since load
+stb r3, 0x0a(r29) # native team
+stb r3, 0x0d(r29) # native costume
+addi r28, r28, 36
+addi r29, r29, 36
+subi r26, r26, 1
+cmpwi r26, 0
+bne CSSSceneDecide_ClearCard
+li r3, 64 # aligned EXI buffer, independent of the caller's stack alignment
+branchl r12, HSD_MemAlloc
+mr REG_GAME_PREP_DATA, r3
+li r4, 64
+branchl r12, Zero_AreaLength
+li r3, CONST_LocalTeamsPoll
+stb r3, 0(REG_GAME_PREP_DATA)
+li r3, ONLINE_MODE_TEAMS + 0x20 # session reset
+stb r3, 1(REG_GAME_PREP_DATA)
+li r3, 4 # no entering controller: clear remembered cards on mode exit
+stb r3, 10(REG_GAME_PREP_DATA)
+mr r3, REG_GAME_PREP_DATA
+li r4, LOCAL_TEAMS_POLL_SIZE
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+li r3, CONST_SlippiCmdCleanupConnections
+stb r3, 0(REG_GAME_PREP_DATA)
+mr r3, REG_GAME_PREP_DATA
+li r4, 1
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+mr r3, REG_GAME_PREP_DATA
+branchl r12, HSD_Free
+li r3, 1 # GM_MENU
+branchl r12, 0x801a42f8
+b CSSSceneDecide_Exit
+CSSSceneDecide_NativeRepeat:
+load r3, 0x80479d30
+li r4, 1
+stb r4, 5(r3)
+b CSSSceneDecide_Exit
+CSSSceneDecide_Stock:
+
 # Run event mode CSS SceneDecide to save HMN character choice
+mr r3, REG_MINORSCENE # count/status checks changed r3; retail expects minor data
 branchl r12,0x801baad0
 
 # Run generic CSS Scene Decide Copy ? to static match data

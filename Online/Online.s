@@ -303,7 +303,23 @@
 .set TXB_PAD, TXB_DELAY + 1 # PAD_REPORT_SIZE
 .set TXB_INPUT_SOURCE_INDEX, TXB_PAD + PAD_REPORT_SIZE # u8, controller port the local inputs are read from
 .set TXB_IS_LEAVING, TXB_INPUT_SOURCE_INDEX + 1 # bool, the local player chose to leave the game
-.set TXB_SIZE, TXB_IS_LEAVING + 1
+.set TXB_LOCAL_TEAMS_PADS, TXB_IS_LEAVING + 1
+.set TXB_SIZE, TXB_LOCAL_TEAMS_PADS + 4 * PAD_REPORT_SIZE
+.set CONST_LocalTeamsPoll, 0xC5
+.set CONST_LocalTeamsConfirm, 0xC6
+.set CONST_LocalTeamsInputs, 0xC7
+.set CONST_LocalTeamsCount, 0xC8
+.set LOCAL_TEAMS_POLL_SIZE, 63 # command/mode/buttons/entering port/PAD reports/CSS frame
+.set LOCAL_TEAMS_STATUS_SIZE, 36 # mappings/picks plus joined and suppressed masks
+.set LTS_NATIVE, 9
+.set LTS_ARMED, 10
+.set LTS_START_HELD, 11
+.set LTS_PORTS, 12
+.set LTS_PICKS, 16
+.set LTS_JOINED, 32
+.set LTS_SUPPRESSED, 33
+.set LTS_ROSTER_COUNT, 34
+.set LTS_ROSTER_ACTION, 35
 
 .set RXB_RESULT, 0 # u8
 .set RXB_OPNT_COUNT, RXB_RESULT + 1 # u8
@@ -446,7 +462,16 @@
 .set CSSDT_LAST_CHAT_MSG_INDEX, CSSDT_CHAT_LOCAL_MSG_COUNT + 1 # u8
 .set CSSDT_TEAM_IDX, CSSDT_LAST_CHAT_MSG_INDEX + 1 # u8
 .set CSSDT_TEAM_COSTUME_IDX, CSSDT_TEAM_IDX + 1 #8
-.set CSSDT_SIZE, CSSDT_TEAM_COSTUME_IDX + 1
+.set CSSDT_LOCAL_TEAMS_STATUS, CSSDT_TEAM_COSTUME_IDX + 1
+.set CSSDT_NATIVE_JOINTS, CSSDT_LOCAL_TEAMS_STATUS + LOCAL_TEAMS_STATUS_SIZE
+.set CSSDT_NATIVE_ORIGINAL_X, CSSDT_NATIVE_JOINTS + 12 * 4
+.set CSSDT_NATIVE_INITIALIZED, CSSDT_NATIVE_ORIGINAL_X + 12 * 4
+.set CSSDT_NATIVE_VISIBLE_COUNT, CSSDT_NATIVE_INITIALIZED + 1 # u8, latched for this CSS; uses existing padding
+.set CSSDT_NATIVE_RELOAD, CSSDT_NATIVE_INITIALIZED + 4 # count toggle rebuilds CSS only
+.set CSSDT_SPINNER4, CSSDT_NATIVE_RELOAD + 1
+.set CSSDT_COUNT_TEXT_ADDR, CSSDT_SPINNER4 + 3 # separate centred label
+.set CSSDT_NATIVE_Z_TIMERS, CSSDT_COUNT_TEXT_ADDR + 4 # one hold timer per local
+.set CSSDT_SIZE, CSSDT_NATIVE_Z_TIMERS + 4
 
 ################################################################################
 # CSS Chat Message Data Table

@@ -11,10 +11,24 @@
 .set REG_TXB_ADDR, 25
 .set REG_CSSDT_ADDR, 24
 
-.set DISCONNECT_HOLD_DELAY, 0x30 # 3 seconds
+.set DISCONNECT_HOLD_DELAY, 0x30 # stock: disconnect when held >48 frames
 
 # Deal with replaced codeline
 beq+ START
+# The VS input branch differs from the single-player branch. Native local CSS
+# always runs our aggregate readiness gate, even when stock Start was masked.
+backup
+getMinorMajor r3
+cmpwi r3, SCENE_ONLINE_CSS
+bne NATIVE_START_NOT_ACTIVE
+loadwz r3, CSSDT_BUF_ADDR
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r3)
+cmpwi r3, 0
+beq NATIVE_START_NOT_ACTIVE
+restore
+b START
+NATIVE_START_NOT_ACTIVE:
+restore
 branch r12, 0x80263334
 
 START:
@@ -93,6 +107,188 @@ branchl r12, SFX_Menu_CommonSound
 
 SOUND_PLAY_END:
 
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+bne NATIVE_TEAMS_HANDLE
+
+# Local teams owns Start/search/ready when enabled. The picker remains P1.
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq LOCAL_TEAMS_STOCK_CSS
+rlwinm. r0, REG_INPUTS, 0, 0x10
+beq LOCAL_TEAMS_NO_CANCEL
+bl FN_RESET_CONNECTIONS
+b SKIP_START_MATCH
+LOCAL_TEAMS_NO_CANCEL:
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 5(REG_CSSDT_ADDR)
+cmpwi r3, 0 # selecting
+beq LOCAL_TEAMS_SELECT
+cmpwi r3, 5 # waiting for the native room-code entry callback
+beq LOCAL_TEAMS_ENTER_CODE
+b CHECK_SHOULD_START_MATCH
+LOCAL_TEAMS_SELECT:
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 6(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq SKIP_START_MATCH
+rlwinm. r0, REG_INPUTS, 0, 19, 19
+beq SKIP_START_MATCH
+loadGlobalFrame r3
+cmpwi r3, 0
+beq SKIP_START_MATCH
+lbz r3, -0x49A9(r13)
+cmpwi r3, 0
+beq SKIP_START_MATCH
+# Local teams proposes its stage directly, including on rematches. Preserve the
+# stock first-match scene routing; an uninitialized zero means "previous loser"
+# and sends us to SSS without having installed its stage-selection callback.
+li r3, ISWINNER_NULL
+stb r3, OFST_R13_ISWINNER(r13)
+stb REG_ZERO, OFST_R13_CHOSESTAGE(r13)
+li r3, SB_RAND # draw from Slippi's allowed-stage pool
+bl FN_TX_LOCK_IN
+# Only the last local confirmation opens normal Slippi code entry. Rematches
+# keep the existing room. The explicit localhost fixture starts without a code.
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 2(REG_CSSDT_ADDR)
+addi r3, r3, 1
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + 1(REG_CSSDT_ADDR)
+cmpw r3, r4
+bne SKIP_START_MATCH
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 8(REG_CSSDT_ADDR)
+cmpwi r3, 0
+bne SKIP_START_MATCH
+lbz r3, MSRB_CONNECTION_STATE(REG_MSRB_ADDR)
+cmpwi r3, MM_STATE_CONNECTION_SUCCESS
+beq SKIP_START_MATCH
+bl FN_LOAD_CODE_ENTRY
+b SKIP_START_MATCH
+LOCAL_TEAMS_ENTER_CODE:
+# A cancelled code-entry screen leaves all saved choices intact. A fresh Start
+# reopens it; Z still cancels the whole local group.
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 6(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq SKIP_START_MATCH
+rlwinm. r0, REG_INPUTS, 0, 19, 19
+beq SKIP_START_MATCH
+bl FN_LOAD_CODE_ENTRY
+b SKIP_START_MATCH
+NATIVE_TEAMS_HANDLE:
+lbz r3, -0x49aa(r13)
+cmpwi r3, 0
+bne SKIP_START_MATCH # native keyboard is operating
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_ROSTER_ACTION(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq NATIVE_TEAMS_NO_ROSTER_REQUEST
+bl FN_NATIVE_ROSTER_REQUEST
+b SKIP_START_MATCH
+NATIVE_TEAMS_NO_ROSTER_REQUEST:
+# Stock: Z press cancels a search/error; connected lobbies require >48 held
+# frames. Separate timers prevent one local inheriting another's partial hold.
+lbz r3, MSRB_CONNECTION_STATE(REG_MSRB_ADDR)
+cmpwi r3, MM_STATE_CONNECTION_SUCCESS
+beq NATIVE_TEAMS_HOLD_DISCONNECT
+li r3, 0
+stw r3, CSSDT_NATIVE_Z_TIMERS(REG_CSSDT_ADDR)
+rlwinm. r0, REG_INPUTS, 0, 0x10
+beq NATIVE_TEAMS_NO_CANCEL
+bl FN_RESET_CONNECTIONS
+b SKIP_START_MATCH
+NATIVE_TEAMS_HOLD_DISCONNECT:
+li r20, 0
+NATIVE_TEAMS_Z_PLAYER:
+mr r3, r20 # HSD pads are already mapped to logical local ports
+branchl r12, Inputs_GetPlayerHeldInputs
+addi r21, REG_CSSDT_ADDR, CSSDT_NATIVE_Z_TIMERS
+rlwinm. r0, r4, 0, 0x10
+beq NATIVE_TEAMS_Z_RELEASED
+lbzx r3, r21, r20
+addi r3, r3, 1
+stbx r3, r21, r20
+cmpwi r3, DISCONNECT_HOLD_DELAY
+ble NATIVE_TEAMS_Z_NEXT
+li r3, 0
+stw r3, CSSDT_NATIVE_Z_TIMERS(REG_CSSDT_ADDR)
+bl FN_RESET_CONNECTIONS
+b SKIP_START_MATCH
+NATIVE_TEAMS_Z_RELEASED:
+li r3, 0
+stbx r3, r21, r20
+NATIVE_TEAMS_Z_NEXT:
+addi r20, r20, 1
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 1(REG_CSSDT_ADDR)
+cmpw r20, r3
+blt NATIVE_TEAMS_Z_PLAYER
+NATIVE_TEAMS_NO_CANCEL:
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 5(REG_CSSDT_ADDR)
+cmpwi r3, 5
+beq NATIVE_TEAMS_REOPEN_CODE
+cmpwi r3, 0
+bne CHECK_SHOULD_START_MATCH
+loadGlobalFrame r3
+cmpwi r3, 0
+beq SKIP_START_MATCH
+li r20, 0
+NATIVE_TEAMS_READY_PLAYER:
+li r21, 1
+slw r21, r21, r20
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 4(REG_CSSDT_ADDR)
+and. r3, r3, r21
+bne NATIVE_TEAMS_READY_NEXT
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_ARMED(REG_CSSDT_ADDR)
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_START_HELD(REG_CSSDT_ADDR)
+and r3, r3, r4
+and. r3, r3, r21
+beq NATIVE_TEAMS_READY_NEXT
+# The player's own token must be placed, with a valid character.
+load r3, 0x804A0BD0
+slwi r4, r20, 2
+lwzx r3, r3, r4
+cmpwi r3, 0
+beq NATIVE_TEAMS_READY_NEXT
+lbz r3, 5(r3)
+cmpwi r3, 0
+bne NATIVE_TEAMS_READY_NEXT
+lwz r3, -0x49f0(r13)
+mulli r4, r20, 0x24
+add r3, r3, r4
+lbz r3, 0x70(r3)
+cmplwi r3, 26
+bge NATIVE_TEAMS_READY_NEXT
+mr r3, r20
+bl FN_TX_NATIVE_PICK
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 4(REG_CSSDT_ADDR)
+or r3, r3, r21
+stb r3, CSSDT_LOCAL_TEAMS_STATUS + 4(REG_CSSDT_ADDR)
+li r3, ISWINNER_NULL
+stb r3, OFST_R13_ISWINNER(r13)
+li r3, 0
+stb r3, OFST_R13_CHOSESTAGE(r13)
+NATIVE_TEAMS_READY_NEXT:
+addi r20, r20, 1
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 1(REG_CSSDT_ADDR)
+cmpw r20, r3
+blt NATIVE_TEAMS_READY_PLAYER
+li r4, 1
+slw r4, r4, r3
+subi r4, r4, 1
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 4(REG_CSSDT_ADDR)
+cmpw r3, r4
+bne SKIP_START_MATCH
+lbz r3, MSRB_CONNECTION_STATE(REG_MSRB_ADDR)
+cmpwi r3, MM_STATE_CONNECTION_SUCCESS
+beq CHECK_SHOULD_START_MATCH
+li r3, 5
+stb r3, CSSDT_LOCAL_TEAMS_STATUS + 5(REG_CSSDT_ADDR)
+bl FN_LOAD_CODE_ENTRY
+b SKIP_START_MATCH
+NATIVE_TEAMS_REOPEN_CODE:
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_ARMED(REG_CSSDT_ADDR)
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_START_HELD(REG_CSSDT_ADDR)
+and r3, r3, r4
+andi. r3, r3, 1 # only the primary operates room entry
+beq SKIP_START_MATCH
+bl FN_LOAD_CODE_ENTRY
+b SKIP_START_MATCH
+LOCAL_TEAMS_STOCK_CSS:
 ################################################################################
 # Fork logic based on current connection state
 ################################################################################
@@ -314,7 +510,16 @@ lbz r4, MSRB_IS_REMOTE_PLAYER_READY(REG_MSRB_ADDR)
 and. r3, r3, r4
 beq SKIP_START_MATCH # If not both players are ready, skip
 
-# Once both players are ready, start the game
+# Native local Teams is ready according to Slippi, not offline VS's team count.
+# The stock continuation at 0x80263264 rejects same-team local selections and
+# plays the error sound every frame instead of requesting the scene change.
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq START_MATCH_STOCK
+restore
+branch r12, 0x80263270
+
+START_MATCH_STOCK:
 restore
 branch r12, 0x80263264
 
@@ -332,8 +537,23 @@ b SKIP_START_MATCH
 ################################################################################
 # Function: Start find match
 ################################################################################
+FN_TX_FIND_MATCH_BLRL:
+blrl
 FN_TX_FIND_MATCH:
 backup
+
+# Prevent a cached EnteringCode status / held keyboard Start from reopening it.
+loadwz r3, CSSDT_BUF_ADDR
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS(r3)
+cmpwi r4, 0
+beq FN_TX_FIND_MATCH_STATUS_READY
+li r4, 1 # Searching; the next poll replaces this with the backend result
+stb r4, CSSDT_LOCAL_TEAMS_STATUS + 5(r3)
+li r4, 0
+stb r4, CSSDT_LOCAL_TEAMS_STATUS + 6(r3)
+stb r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_ARMED(r3)
+stb r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_START_HELD(r3)
+FN_TX_FIND_MATCH_STATUS_READY:
 
 # When the player starts looking for a match is a good time to reset the game index
 loadwz r3, 0x803dad40 # Load minor scene data array ptr
@@ -388,6 +608,126 @@ blr
 #     -1 = unselected (use opponents stage)
 #      0+ = specify stage ID.
 ################################################################################
+FN_NATIVE_ROSTER_REQUEST:
+backup
+loadwz r31, CSSDT_BUF_ADDR
+lbz r26, CSSDT_LOCAL_TEAMS_STATUS + LTS_ROSTER_COUNT(r31)
+lbz r25, CSSDT_LOCAL_TEAMS_STATUS + 1(r31)
+li r3, 64
+  branchl r12, HSD_MemAlloc
+  mr r24, r3
+  cmpwi r24, 0
+  beq FN_NATIVE_ROSTER_DONE
+li r3, CONST_LocalTeamsCount
+stb r3, 0(r24)
+stb r26, 1(r24)
+li r27, 0
+FN_NATIVE_ROSTER_PICK:
+mulli r3, r27, 0x24
+lwz r29, -0x49f0(r13)
+add r29, r29, r3
+slwi r3, r27, 2
+addi r28, r24, 2
+add r28, r28, r3
+lbz r3, 0x70(r29)
+stb r3, 0(r28)
+lbz r3, 0x73(r29)
+stb r3, 1(r28)
+lbz r3, 0x79(r29)
+stb r3, 2(r28)
+li r3, 0
+cmpw r27, r25
+bge FN_NATIVE_ROSTER_PICK_READY
+load r4, 0x804A0BD0
+slwi r5, r27, 2
+lwzx r4, r4, r5
+cmpwi r4, 0
+beq FN_NATIVE_ROSTER_PICK_READY
+lbz r4, 5(r4)
+cmpwi r4, 0
+bne FN_NATIVE_ROSTER_PICK_READY
+li r3, 1
+FN_NATIVE_ROSTER_PICK_READY:
+stb r3, 3(r28)
+addi r27, r27, 1
+cmpwi r27, 4
+blt FN_NATIVE_ROSTER_PICK
+mr r3, r24
+li r4, 18
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+mr r3, r24
+li r4, LOCAL_TEAMS_STATUS_SIZE
+  li r5, CONST_ExiRead
+  branchl r12, FN_EXITransferBuffer
+  lbz r3, 0(r24)
+  cmpwi r3, 1
+  bne FN_NATIVE_ROSTER_FREE
+  lbz r3, LTS_NATIVE(r24)
+  cmpwi r3, 1
+  bne FN_NATIVE_ROSTER_FREE
+cmpwi r26, 0
+beq FN_NATIVE_ROSTER_RELOAD
+lbz r3, 1(r24)
+cmpw r3, r26
+bne FN_NATIVE_ROSTER_FREE
+FN_NATIVE_ROSTER_RELOAD:
+li r3, 1
+cmpwi r26, 0
+bne FN_NATIVE_ROSTER_SET_RELOAD
+  li r3, 0 # entering controller leaves to the Online menu
+FN_NATIVE_ROSTER_SET_RELOAD:
+stb r3, CSSDT_NATIVE_RELOAD(r31)
+li r3, 2
+stb r3, -0x49aa(r13)
+li r3, 2
+branchl r12, SFX_Menu_CommonSound
+FN_NATIVE_ROSTER_FREE:
+  mr r3, r24
+  branchl r12, HSD_Free
+FN_NATIVE_ROSTER_DONE:
+  restore
+blr
+
+FN_TX_NATIVE_PICK:
+backup
+mr r31, r3 # logical local player, independent of the menu-entering controller
+li r3, PSTB_SIZE
+branchl r12, HSD_MemAlloc
+mr r30, r3
+li r4, PSTB_SIZE
+branchl r12, Zero_AreaLength
+li r3, CONST_LocalTeamsConfirm
+stb r3, PSTB_CMD(r30)
+lwz r29, -0x49f0(r13)
+mulli r3, r31, 0x24
+add r29, r29, r3
+lbz r3, 0x70(r29)
+stb r3, PSTB_CHAR_ID(r30)
+lbz r3, 0x73(r29)
+stb r3, PSTB_CHAR_COLOR(r30)
+lbz r3, 0x79(r29)
+stb r3, PSTB_TEAM_ID(r30)
+li r3, 1
+stb r3, PSTB_CHAR_OPT(r30)
+li r3, 3 # random stage; Dolphin shares one proposal across the local group
+stb r3, PSTB_STAGE_OPT(r30)
+li r3, 0
+sth r3, PSTB_STAGE_ID(r30)
+ori r3, r31, 0x80 # private C6 discriminant, stock Slippi wire format unchanged
+stb r3, PSTB_ONLINE_MODE(r30)
+computeBranchTargetAddress r3, INJ_FREEZE_STADIUM
+lbz r3, 8(r3)
+stb r3, PSTB_ALT_STAGE_MODE(r30)
+mr r3, r30
+li r4, PSTB_SIZE
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+mr r3, r30
+branchl r12, HSD_Free
+restore
+blr
+
 FN_TX_LOCK_IN_BLRL:
 blrl
 FN_TX_LOCK_IN:
@@ -404,6 +744,12 @@ mr REG_TXB_ADDR, r3
 
 # Write tx data
 li r3, CONST_SlippiCmdSetMatchSelections
+loadwz r4, CSSDT_BUF_ADDR
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS(r4)
+cmpwi r4, 0
+beq LOCAL_TEAMS_SET_SELECTION_CMD
+li r3, CONST_LocalTeamsConfirm
+LOCAL_TEAMS_SET_SELECTION_CMD:
 stb r3, PSTB_CMD(REG_TXB_ADDR)
 
 # Fetch selected character information
@@ -513,12 +859,24 @@ blr
 FN_LOAD_CODE_ENTRY:
 backup
 
+li r3, 0
+stb r3, CSSDT_LOCAL_TEAMS_STATUS + 6(REG_CSSDT_ADDR)
+stb r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_ARMED(REG_CSSDT_ADDR)
+stb r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_START_HELD(REG_CSSDT_ADDR)
+
 # Indicate we want name entry to operate in connect code mode
 li r3, 1
 stb r3, OFST_R13_NAME_ENTRY_MODE(r13)
 
 # Prepare callback address on successful name entry
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq FN_LOAD_CODE_ENTRY_STOCK_CALLBACK
+bl FN_TX_FIND_MATCH_BLRL
+b FN_LOAD_CODE_ENTRY_SET_CALLBACK
+FN_LOAD_CODE_ENTRY_STOCK_CALLBACK:
 bl FN_LOCK_IN_AND_SEARCH_BLRL
+FN_LOAD_CODE_ENTRY_SET_CALLBACK:
 mflr r3
 stw r3, OFST_R13_CALLBACK(r13)
 
