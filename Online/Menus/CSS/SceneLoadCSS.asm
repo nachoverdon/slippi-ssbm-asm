@@ -70,6 +70,11 @@ mr REG_CSSDT_ADDR, r3
 li r4, CSSDT_SIZE
 branchl r12, Zero_AreaLength
 
+# Mark CSS as still initializing so VI-retrace IRQ skips local teams polling
+# until InitNativeLocalTeams finishes building CSS joints/controls.
+li r3, 1
+stb r3, CSSDT_LOADING(REG_CSSDT_ADDR)
+
 # Store CSSDT to static mem location
 load r3, CSSDT_BUF_ADDR
 stw REG_CSSDT_ADDR, 0(r3)

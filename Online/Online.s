@@ -473,7 +473,9 @@
 .set CSSDT_SPINNER4, CSSDT_NATIVE_RELOAD + 1
 .set CSSDT_COUNT_TEXT_ADDR, CSSDT_SPINNER4 + 3 # separate centred label
 .set CSSDT_NATIVE_Z_TIMERS, CSSDT_COUNT_TEXT_ADDR + 4 # one hold timer per local
-.set CSSDT_SIZE, CSSDT_NATIVE_Z_TIMERS + 4
+.set CSSDT_LOADING, CSSDT_NATIVE_Z_TIMERS + 4 # 1 while SceneLoad_CSS / InitNativeLocalTeams runs
+.set CSSDT_LOCAL_TEAMS_EXI_BUF, ((CSSDT_LOADING + 1 + 31) / 32) * 32 # 32-byte aligned for dcbi/dcbf
+.set CSSDT_SIZE, CSSDT_LOCAL_TEAMS_EXI_BUF + 128
 
 ################################################################################
 # CSS Chat Message Data Table

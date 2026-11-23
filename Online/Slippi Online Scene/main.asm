@@ -201,6 +201,11 @@ MajorSceneUnload:
 blrl
 backup
 
+# Clear stale CSSDT pointer so VI-retrace IRQ never reads a freed CSS table
+li r3, 0
+load r4, CSSDT_BUF_ADDR
+stw r3, 0(r4)
+
 ################################################################################
 # Set up Zelda to select Zelda as default
 ################################################################################
@@ -347,6 +352,11 @@ createGamePrepStaticBlock
 #region CSSScenePrep
 CSSScenePrep:
 backup
+
+# Clear stale CSSDT pointer before SceneLoad_CSS initializes the new table
+li r0, 0
+load r4, CSSDT_BUF_ADDR
+stw r0, 0(r4)
 
 #Restore saved fighter choice
 lwz	r4, -0x77C0 (r13)

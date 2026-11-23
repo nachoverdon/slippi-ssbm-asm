@@ -49,9 +49,11 @@ getMinorMajor r3
 cmpwi r3, SCENE_ONLINE_CSS
 bne DONE
 loadwz r28, CSSDT_BUF_ADDR
+cmpwi r28, 0
+beq DONE
 lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r28)
 cmpwi r3, 0
-beq DONE
+beq NATIVE_CLEAR_LOADING
 # The multiplayer menu has different frame/title meshes. Slippi's title
 # animation expects SingleMenu UVs, so transplant those two unskinned DObj lists.
 lwz r3, -0x49c8(r13)
@@ -252,6 +254,10 @@ li r3, 1
 stb r3, CSSDT_NATIVE_INITIALIZED(r28)
 lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 1(r28)
 stb r3, CSSDT_NATIVE_VISIBLE_COUNT(r28) # commit layout with the newly spawned fields/cursors
+
+NATIVE_CLEAR_LOADING:
+li r3, 0
+stb r3, CSSDT_LOADING(r28)
 DONE:
 restore BKP_DEFAULT_FREE_SPACE_SIZE, 2
 lmw r17, 0x11c(sp) # original instruction

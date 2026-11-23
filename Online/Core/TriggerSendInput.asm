@@ -1228,10 +1228,23 @@ b EXIT # Gameplay must not fall through into the CSS-only polling/remap below.
 # Config/mode disabled returns before changing any original inputs.
 ################################################################################
 LOCAL_TEAMS_CSS_INPUTS:
+# Only active Teams CSS sessions poll local-teams coordinator state, and only
+# once SceneLoad_CSS and InitNativeLocalTeams have finished initializing CSSDT.
+lbz r3, OFST_R13_ONLINE_MODE(r13)
+cmpwi r3, ONLINE_MODE_TEAMS
+bne EXIT
+loadwz REG_ODB_ADDRESS, CSSDT_BUF_ADDR
+cmpwi REG_ODB_ADDRESS, 0
+beq EXIT
+lbz r3, CSSDT_LOADING(REG_ODB_ADDRESS)
+cmpwi r3, 0
+bne EXIT
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS(REG_ODB_ADDRESS)
+cmpwi r3, 0
+beq EXIT
+
 lwz REG_PARENT_STACK_FRAME, 0(sp)
-li r3, 128
-branchl r12, HSD_MemAlloc
-mr REG_VARIOUS_1, r3
+addi REG_VARIOUS_1, REG_ODB_ADDRESS, CSSDT_LOCAL_TEAMS_EXI_BUF
 # Snapshot all reports before remapping; mappings such as 1/3 must not alias.
 addi r3, REG_VARIOUS_1, 64
 addi r4, REG_PARENT_STACK_FRAME, P1_PAD_OFFSET
@@ -1274,10 +1287,7 @@ li r4, LOCAL_TEAMS_STATUS_SIZE
 li r5, CONST_ExiRead
 branchl r12, FN_EXITransferBuffer
 # Store the response for the later CSS Start handler.
-loadwz r3, CSSDT_BUF_ADDR
-cmpwi r3, 0
-beq LOCAL_TEAMS_STATUS_STORED
-addi r3, r3, CSSDT_LOCAL_TEAMS_STATUS
+addi r3, REG_ODB_ADDRESS, CSSDT_LOCAL_TEAMS_STATUS
 mr r4, REG_VARIOUS_1
 li r5, LOCAL_TEAMS_STATUS_SIZE
 branchl r12, memcpy
@@ -1406,8 +1416,6 @@ addi REG_COUNT, REG_COUNT, 1
 cmpwi REG_COUNT, 4
 blt NATIVE_TEAMS_MAP_PAD
 LOCAL_TEAMS_CSS_FREE:
-mr r3, REG_VARIOUS_1
-branchl r12, HSD_Free
 b EXIT
 
 EXIT:
