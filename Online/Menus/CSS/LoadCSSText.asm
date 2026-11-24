@@ -166,6 +166,8 @@ blrl
 .string "Press START"
 .set TPO_NATIVE_JOIN, TPO_NATIVE_PRESS_START + 12
 .string "Waiting for input"
+.set TPO_STRING_HOLD_START_TO_JOIN, TPO_NATIVE_JOIN + 18
+.string "Hold START to join"
 
 .align 2
 
@@ -674,8 +676,49 @@ beq UPDATE_PRESS_Z_ERROR
 cmpwi r3, MM_STATE_IDLE
 bgt UPDATE_PRESS_Z_CONNECTING
 
-# If we get here, pressing Z does nothing, clear
+# If we get here, pressing Z does nothing. In native Local Teams Selecting phase,
+# show "Hold START to join" when any connected controller is not yet added.
 addi r5, REG_TEXT_PROPERTIES, TPO_EMPTY_STRING
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq UPDATE_PRESS_Z_TEXT
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 5(REG_CSSDT_ADDR) # phase
+cmpwi r3, 0 # Phase::Selecting
+bne UPDATE_PRESS_Z_TEXT
+lbz r6, CSSDT_LOCAL_TEAMS_STATUS + 1(REG_CSSDT_ADDR) # count
+cmpwi r6, 1
+blt UPDATE_PRESS_Z_TEXT
+cmpwi r6, 4
+bge UPDATE_PRESS_Z_TEXT
+# Only show when every open card is claimed (matching LocalTeams::State::PollJoining).
+li r3, 1
+slw r3, r3, r6
+subi r3, r3, 1
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_JOINED(REG_CSSDT_ADDR)
+and r4, r4, r3
+cmpw r4, r3
+bne UPDATE_PRESS_Z_TEXT
+# Build bitmask of physical ports claimed by slots 0..count-1.
+li r7, 0
+li r8, 0
+CHECK_UNADDED_CONTROLLERS_LOOP:
+cmpw r8, r6
+bge CHECK_UNADDED_CONTROLLERS_DONE
+addi r3, r8, CSSDT_LOCAL_TEAMS_STATUS + LTS_PORTS
+lbzx r4, REG_CSSDT_ADDR, r3
+cmplwi r4, 4
+bge CHECK_UNADDED_CONTROLLERS_NEXT
+li r3, 1
+slw r3, r3, r4
+or r7, r7, r3
+CHECK_UNADDED_CONTROLLERS_NEXT:
+addi r8, r8, 1
+b CHECK_UNADDED_CONTROLLERS_LOOP
+CHECK_UNADDED_CONTROLLERS_DONE:
+lbz r3, CSSDT_CONNECTED_PADS(REG_CSSDT_ADDR)
+andc. r3, r3, r7
+beq UPDATE_PRESS_Z_TEXT
+addi r5, REG_TEXT_PROPERTIES, TPO_STRING_HOLD_START_TO_JOIN
 b UPDATE_PRESS_Z_TEXT
 
 UPDATE_PRESS_Z_CONNECTING:

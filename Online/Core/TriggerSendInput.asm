@@ -1260,16 +1260,26 @@ ori r3, r3, 0x40 # keyboard owns inputs; disarm Start until CSS returns
 LOCAL_TEAMS_POLL_MODE_READY:
 stb r3, 1(REG_VARIOUS_1)
 li REG_COUNT, 0
+li r5, 0 # bitmask of physically connected controllers (err == 0)
 LOCAL_TEAMS_COPY_BUTTONS:
 mulli r4, REG_COUNT, PAD_REPORT_SIZE
 addi r4, r4, P1_PAD_OFFSET
 lhzx r3, REG_PARENT_STACK_FRAME, r4
+addi r6, r4, 10
+lbzx r6, REG_PARENT_STACK_FRAME, r6
+cmpwi r6, 0
+bne LOCAL_TEAMS_PAD_DISCONNECTED
+li r6, 1
+slw r6, r6, REG_COUNT
+or r5, r5, r6
+LOCAL_TEAMS_PAD_DISCONNECTED:
 slwi r4, REG_COUNT, 1
 addi r4, r4, 2
 sthx r3, REG_VARIOUS_1, r4
 addi REG_COUNT, REG_COUNT, 1
 cmpwi REG_COUNT, 4
 blt LOCAL_TEAMS_COPY_BUTTONS
+stb r5, CSSDT_CONNECTED_PADS(REG_ODB_ADDRESS)
 loadGlobalFrame r3
 stw r3, 59(REG_VARIOUS_1)
 lbz r3, -0x5108(r13)
@@ -1361,6 +1371,11 @@ add r4, r4, r3
 mr r3, REG_VARIOUS_2
 li r5, PAD_REPORT_SIZE
 branchl r12, memcpy
+# Never feed a non-zero pad error into an active native CSS slot, or retail
+# mnCharSel_CursorThink will convert the card to CPU and pick a random fighter.
+lbz r3, 10(REG_VARIOUS_2)
+cmpwi r3, 0
+bne NATIVE_TEAMS_BLOCKED_PAD
 # Claimed cursors can move immediately. Only the joining buttons wait for release.
 li r3, 1
 slw r3, r3, REG_COUNT

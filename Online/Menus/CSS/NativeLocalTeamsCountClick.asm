@@ -83,6 +83,43 @@ stb r6, 3(r5)
 addi r27, r27, 1
 cmpwi r27, 4
 blt NATIVE_SAVE_PICK
+# Snapshot claimed on-screen cursor positions by physical port before the EXI
+# count change, so an IRQ poll cannot overwrite CSSDT_LOCAL_TEAMS_STATUS first.
+li r22, 0
+load r23, CSS_SAVED_CURSORS_ADDR
+li r27, 0
+NATIVE_SAVE_CURSOR:
+cmpw r27, r25
+bge NATIVE_SAVE_CURSOR_DONE
+li r3, 1
+slw r3, r3, r27
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_JOINED(r31)
+and. r3, r3, r4
+beq NATIVE_SAVE_CURSOR_NEXT
+addi r3, r27, CSSDT_LOCAL_TEAMS_STATUS + LTS_PORTS
+lbzx r4, r31, r3
+cmplwi r4, 4
+bge NATIVE_SAVE_CURSOR_NEXT
+load r5, 0x804A0BC0
+slwi r6, r27, 2
+lwzx r5, r5, r6
+cmpwi r5, 0
+beq NATIVE_SAVE_CURSOR_NEXT
+slwi r6, r4, 2
+addi r7, r23, SAVED_CURSORS_X
+lwz r3, 0x0c(r5)
+stwx r3, r7, r6
+addi r7, r23, SAVED_CURSORS_Y
+lwz r3, 0x10(r5)
+stwx r3, r7, r6
+li r3, 1
+slw r3, r3, r4
+or r22, r22, r3
+NATIVE_SAVE_CURSOR_NEXT:
+addi r27, r27, 1
+cmpwi r27, 4
+blt NATIVE_SAVE_CURSOR
+NATIVE_SAVE_CURSOR_DONE:
 mr r3, r24
 li r4, 18
 li r5, CONST_ExiWrite
@@ -100,6 +137,7 @@ bne NATIVE_FREE_BUFFER
 lbz r3, 1(r24)
 cmpw r3, r26 # reload only when the backend reports the exact requested count
 bne NATIVE_FREE_BUFFER
+stw r22, SAVED_CURSORS_MASK(r23)
 li r3, 1
 stb r3, CSSDT_NATIVE_RELOAD(r31)
 li r3, 2 # unconditional exit; retail rejects flag 1 with empty tokens

@@ -652,6 +652,45 @@ stb r3, 3(r28)
 addi r27, r27, 1
 cmpwi r27, 4
 blt FN_NATIVE_ROSTER_PICK
+# Snapshot claimed on-screen cursor positions by physical port before the EXI
+# roster change, so an IRQ poll cannot overwrite CSSDT_LOCAL_TEAMS_STATUS first.
+li r22, 0
+load r23, CSS_SAVED_CURSORS_ADDR
+cmpwi r26, 0
+beq FN_NATIVE_ROSTER_SAVE_CURSOR_DONE
+li r27, 0
+FN_NATIVE_ROSTER_SAVE_CURSOR:
+cmpw r27, r25
+bge FN_NATIVE_ROSTER_SAVE_CURSOR_DONE
+li r3, 1
+slw r3, r3, r27
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_JOINED(r31)
+and. r3, r3, r4
+beq FN_NATIVE_ROSTER_SAVE_CURSOR_NEXT
+addi r3, r27, CSSDT_LOCAL_TEAMS_STATUS + LTS_PORTS
+lbzx r4, r31, r3
+cmplwi r4, 4
+bge FN_NATIVE_ROSTER_SAVE_CURSOR_NEXT
+load r5, 0x804A0BC0
+slwi r6, r27, 2
+lwzx r5, r5, r6
+cmpwi r5, 0
+beq FN_NATIVE_ROSTER_SAVE_CURSOR_NEXT
+slwi r6, r4, 2
+addi r7, r23, SAVED_CURSORS_X
+lwz r3, 0x0c(r5)
+stwx r3, r7, r6
+addi r7, r23, SAVED_CURSORS_Y
+lwz r3, 0x10(r5)
+stwx r3, r7, r6
+li r3, 1
+slw r3, r3, r4
+or r22, r22, r3
+FN_NATIVE_ROSTER_SAVE_CURSOR_NEXT:
+addi r27, r27, 1
+cmpwi r27, 4
+blt FN_NATIVE_ROSTER_SAVE_CURSOR
+FN_NATIVE_ROSTER_SAVE_CURSOR_DONE:
 mr r3, r24
 li r4, 18
 li r5, CONST_ExiWrite
@@ -672,6 +711,7 @@ lbz r3, 1(r24)
 cmpw r3, r26
 bne FN_NATIVE_ROSTER_FREE
 FN_NATIVE_ROSTER_RELOAD:
+stw r22, SAVED_CURSORS_MASK(r23)
 li r3, 1
 cmpwi r26, 0
 bne FN_NATIVE_ROSTER_SET_RELOAD

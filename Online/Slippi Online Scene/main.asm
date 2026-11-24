@@ -205,6 +205,8 @@ backup
 li r3, 0
 load r4, CSSDT_BUF_ADDR
 stw r3, 0(r4)
+load r4, CSS_SAVED_CURSORS_ADDR
+stw r3, SAVED_CURSORS_MASK(r4)
 
 ################################################################################
 # Set up Zelda to select Zelda as default
@@ -401,6 +403,9 @@ li r4, 1
 stb r4, 0x5(r3) # explicit next CSS: retail stores requested minor + 1
 b CSSSceneDecide_Exit
 CSSSceneDecide_Normal:
+li r3, 0
+load r4, CSS_SAVED_CURSORS_ADDR
+stw r3, SAVED_CURSORS_MASK(r4)
 
 # Check native Back before event-mode copying. Only a Slippi-ready handoff
 # may advance native Teams; never send an offline exit to uninitialized SSS.

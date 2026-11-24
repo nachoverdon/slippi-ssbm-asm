@@ -179,18 +179,44 @@ stfs f30, 0x1c(r29)
 lfs f30, 0x20(r29)
 fadds f30, f30, f31
 stfs f30, 0x20(r29)
-# Spawn every local hand on its own moved team marker, including P1.
+# Preserve existing on-screen hands across roster reloads; spawn new/unclaimed
+# local hands on their own moved team markers, including P1 on fresh entry.
+load r3, 0x804A0BC0
+slwi r4, r30, 2
+lwzx r27, r3, r4
+li r3, 1
+slw r3, r3, r30
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_JOINED(r28)
+and. r3, r3, r4
+beq NATIVE_SPAWN_DEFAULT
+addi r3, r30, CSSDT_LOCAL_TEAMS_STATUS + LTS_PORTS
+lbzx r4, r28, r3
+cmplwi r4, 4
+bge NATIVE_SPAWN_DEFAULT
+load r5, CSS_SAVED_CURSORS_ADDR
+lwz r6, SAVED_CURSORS_MASK(r5)
+li r3, 1
+slw r3, r3, r4
+and. r3, r3, r6
+beq NATIVE_SPAWN_DEFAULT
+slwi r4, r4, 2
+addi r6, r5, SAVED_CURSORS_X
+lwzx r3, r6, r4
+stw r3, 0x0c(r27)
+addi r6, r5, SAVED_CURSORS_Y
+lwzx r3, r6, r4
+stw r3, 0x10(r27)
+b NATIVE_CURSOR_POS_DONE
+NATIVE_SPAWN_DEFAULT:
 lfs f30, 0x1c(r29)
 lfs f31, 0x20(r29)
 fadds f30, f30, f31
 lfs f31, 128(r31)
 fmuls f30, f30, f31
-load r3, 0x804A0BC0
-slwi r4, r30, 2
-lwzx r3, r3, r4
-stfs f30, 0x0c(r3)
+stfs f30, 0x0c(r27)
 lfs f31, 132(r31)
-stfs f31, 0x10(r3)
+stfs f31, 0x10(r27)
+NATIVE_CURSOR_POS_DONE:
 # Force the first visible token to use its assigned adapter-port label.
 load r3, 0x804A0BD0
 slwi r4, r30, 2
@@ -254,9 +280,48 @@ li r3, 1
 stb r3, CSSDT_NATIVE_INITIALIZED(r28)
 lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 1(r28)
 stb r3, CSSDT_NATIVE_VISIBLE_COUNT(r28) # commit layout with the newly spawned fields/cursors
+# Clear CSSDT_LOADING and saved cursor mask first so any subsequent VI-retrace
+# IRQ immediately remaps physical ports into logical slots 0..count-1.
+li r3, 0
+load r4, CSS_SAVED_CURSORS_ADDR
+stw r3, SAVED_CURSORS_MASK(r4)
+stb r3, CSSDT_LOADING(r28)
+# Discard raw unremapped pad frames queued while CSSDT_LOADING was 1, and prime
+# HSD_PadMasterStatus / HSD_PadCopyStatus so skipped physical ports never read
+# err != 0 on Frame 0 (which makes mnCharSel_CursorThink convert them to CPU).
+li r3, 1 # HSD_PAD_FLUSH_QUEUE_THROWAWAY
+branchl r12, HSD_PadFlushQueue
+li r30, 0
+lbz r27, CSSDT_LOCAL_TEAMS_STATUS + 1(r28)
+NATIVE_INIT_PAD_STATUS:
+mulli r29, r30, 0x44
+load r3, 0x804C1FAC # HSD_PadMasterStatus
+add r3, r3, r29
+li r4, 0x44
+branchl r12, Zero_AreaLength
+load r3, 0x804C20BC # HSD_PadCopyStatus
+add r3, r3, r29
+li r4, 0x44
+branchl r12, Zero_AreaLength
+cmpw r30, r27
+blt NATIVE_INIT_PAD_NEXT
+li r4, -1 # PAD_ERR_NO_CONTROLLER for closed unused slots
+load r3, 0x804C1FAC
+add r3, r3, r29
+stb r4, 0x41(r3)
+load r3, 0x804C20BC
+add r3, r3, r29
+stb r4, 0x41(r3)
+NATIVE_INIT_PAD_NEXT:
+addi r30, r30, 1
+cmpwi r30, 4
+blt NATIVE_INIT_PAD_STATUS
+b DONE
 
 NATIVE_CLEAR_LOADING:
 li r3, 0
+load r4, CSS_SAVED_CURSORS_ADDR
+stw r3, SAVED_CURSORS_MASK(r4)
 stb r3, CSSDT_LOADING(r28)
 DONE:
 restore BKP_DEFAULT_FREE_SPACE_SIZE, 2

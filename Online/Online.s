@@ -27,6 +27,11 @@
 # -0x7510 (r13)
 
 .set CSSDT_BUF_ADDR, 0x80005614
+.set CSS_SAVED_CURSORS_ADDR, 0x80005620 # 36 bytes (0x80005620..0x80005643): survives CSS reload
+.set SAVED_CURSORS_MASK, 0x0 # u32 bitmask of physical ports (0..3) with saved (x, y)
+.set SAVED_CURSORS_X, 0x4 # f32[4] cursor X coordinates indexed by physical port
+.set SAVED_CURSORS_Y, 0x14 # f32[4] cursor Y coordinates indexed by physical port
+.set SAVED_CURSORS_SIZE, 0x24
 
 ################################################################################
 # Debug Flags
@@ -474,7 +479,8 @@
 .set CSSDT_COUNT_TEXT_ADDR, CSSDT_SPINNER4 + 3 # separate centred label
 .set CSSDT_NATIVE_Z_TIMERS, CSSDT_COUNT_TEXT_ADDR + 4 # one hold timer per local
 .set CSSDT_LOADING, CSSDT_NATIVE_Z_TIMERS + 4 # 1 while SceneLoad_CSS / InitNativeLocalTeams runs
-.set CSSDT_LOCAL_TEAMS_EXI_BUF, ((CSSDT_LOADING + 1 + 31) / 32) * 32 # 32-byte aligned for dcbi/dcbf
+.set CSSDT_CONNECTED_PADS, CSSDT_LOADING + 1 # bitmask of physically connected pads (bits 0..3)
+.set CSSDT_LOCAL_TEAMS_EXI_BUF, ((CSSDT_CONNECTED_PADS + 1 + 31) / 32) * 32 # 32-byte aligned for dcbi/dcbf
 .set CSSDT_SIZE, CSSDT_LOCAL_TEAMS_EXI_BUF + 128
 
 ################################################################################
