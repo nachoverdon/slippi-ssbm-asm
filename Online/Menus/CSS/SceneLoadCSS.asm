@@ -85,10 +85,10 @@ branchl r12, HSD_MemAlloc
 stw r3, CSSDT_MSRB_ADDR(REG_CSSDT_ADDR)
 
 # Query configuration without sampling inputs or resetting the rematch gate.
-li r3, 64
+li r3, 128
 branchl r12, HSD_MemAlloc
 mr r29, r3
-li r4, 64
+li r4, 128
 branchl r12, Zero_AreaLength
 li r3, CONST_LocalTeamsPoll
 stb r3, 0(r29)
@@ -148,6 +148,20 @@ NATIVE_RESTORE_NEXT:
 addi r27, r27, 1
 cmpwi r27, 4
 blt NATIVE_RESTORE_PLAYER
+li r3, CONST_LocalTeamsNames
+stb r3, 0(r29)
+mr r3, r29
+li r4, 1
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+mr r3, r29
+li r4, LOCAL_TEAMS_NAMES_SIZE
+li r5, CONST_ExiRead
+branchl r12, FN_EXITransferBuffer
+addi r3, REG_CSSDT_ADDR, CSSDT_LOCAL_TEAMS_NAMES
+mr r4, r29
+li r5, LOCAL_TEAMS_NAMES_SIZE
+branchl r12, memcpy
 NATIVE_RESTORE_DONE:
 mr r3, r29
 branchl r12, HSD_Free

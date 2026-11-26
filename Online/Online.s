@@ -315,8 +315,11 @@
 .set CONST_LocalTeamsConfirm, 0xC6
 .set CONST_LocalTeamsInputs, 0xC7
 .set CONST_LocalTeamsCount, 0xC8
+.set CONST_LocalTeamsNames, 0xC9
 .set LOCAL_TEAMS_POLL_SIZE, 63 # command/mode/buttons/entering port/PAD reports/CSS frame
 .set LOCAL_TEAMS_STATUS_SIZE, 36 # mappings/picks plus joined and suppressed masks
+.set LOCAL_TEAMS_NAME_SIZE, 31
+.set LOCAL_TEAMS_NAMES_SIZE, 4 * LOCAL_TEAMS_NAME_SIZE
 .set LTS_NATIVE, 9
 .set LTS_ARMED, 10
 .set LTS_START_HELD, 11
@@ -474,6 +477,7 @@
 .set CSSDT_NATIVE_ORIGINAL_X, CSSDT_NATIVE_JOINTS + 12 * 4
 .set CSSDT_NATIVE_INITIALIZED, CSSDT_NATIVE_ORIGINAL_X + 12 * 4
 .set CSSDT_NATIVE_VISIBLE_COUNT, CSSDT_NATIVE_INITIALIZED + 1 # u8, latched for this CSS; uses existing padding
+.set CSSDT_NATIVE_SHEIK_MASK, CSSDT_NATIVE_INITIALIZED + 2 # u8, bitmask of slots temporarily mapped 0x13->0x12 during CSS init
 .set CSSDT_NATIVE_RELOAD, CSSDT_NATIVE_INITIALIZED + 4 # count toggle rebuilds CSS only
 .set CSSDT_SPINNER4, CSSDT_NATIVE_RELOAD + 1
 .set CSSDT_COUNT_TEXT_ADDR, CSSDT_SPINNER4 + 3 # separate centred label
@@ -481,7 +485,17 @@
 .set CSSDT_LOADING, CSSDT_NATIVE_Z_TIMERS + 4 # 1 while SceneLoad_CSS / InitNativeLocalTeams runs
 .set CSSDT_CONNECTED_PADS, CSSDT_LOADING + 1 # bitmask of physically connected pads (bits 0..3)
 .set CSSDT_LOCAL_TEAMS_EXI_BUF, ((CSSDT_CONNECTED_PADS + 1 + 31) / 32) * 32 # 32-byte aligned for dcbi/dcbf
-.set CSSDT_SIZE, CSSDT_LOCAL_TEAMS_EXI_BUF + 128
+.set CSSDT_LOCAL_TEAMS_NAMES, CSSDT_LOCAL_TEAMS_EXI_BUF + 128 # 0x140, 4 * 31 = 124 bytes
+.set CSSDT_CARD_PORT_TEXTS, CSSDT_LOCAL_TEAMS_NAMES + LOCAL_TEAMS_NAMES_SIZE # 0x1BC, u32[4]
+.set CSSDT_CARD_NAME_TEXTS, CSSDT_CARD_PORT_TEXTS + 16 # 0x1CC, u32[4]
+.set CSSDT_NATIVE_ORIGINAL_Z, CSSDT_CARD_NAME_TEXTS + 16 # 0x1DC, f32[4] (bg_joint base Z)
+.set CSSDT_CARD_PORT_CACHE, CSSDT_NATIVE_ORIGINAL_Z + 16 # 0x1EC, u8[4]
+.set CSSDT_NATIVE_ORIGINAL_Y, CSSDT_CARD_PORT_CACHE + 4       # 0x1F0, f32[12]
+.set CSSDT_NATIVE_ORIGINAL_SX, CSSDT_NATIVE_ORIGINAL_Y + 48   # 0x220, f32[12]
+.set CSSDT_NATIVE_ORIGINAL_SY, CSSDT_NATIVE_ORIGINAL_SX + 48  # 0x250, f32[12]
+.set CSSDT_NATIVE_PIVOT_DX, CSSDT_NATIVE_ORIGINAL_SY + 48     # 0x280, f32[12] (world_x - card_cx)
+.set CSSDT_NATIVE_PIVOT_DY, CSSDT_NATIVE_PIVOT_DX + 48        # 0x2B0, f32[12] (world_y - (-3.4))
+.set CSSDT_SIZE, CSSDT_NATIVE_PIVOT_DY + 48                   # 0x2E0
 
 ################################################################################
 # CSS Chat Message Data Table

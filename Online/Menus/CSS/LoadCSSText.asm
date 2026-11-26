@@ -168,6 +168,8 @@ blrl
 .string "Waiting for input"
 .set TPO_STRING_HOLD_START_TO_JOIN, TPO_NATIVE_JOIN + 18
 .string "Hold START to join"
+.set TPO_NATIVE_CARD_PORT_FMT, TPO_STRING_HOLD_START_TO_JOIN + 19
+.string "P%d"
 
 .align 2
 
@@ -191,6 +193,7 @@ blrl
 NATIVE_EXTRA_TEXT_PROPERTIES:
 blrl
 .float 121 # 52 + 3*23 fourth-row Y
+.float -12 # shift header, P1-P4 rows, and error lines up to card top without moving gray help lines
 
 ################################################################################
 # Start Init Function
@@ -298,6 +301,10 @@ lfs f1, TPO_BASE_CANVAS_SCALING(REG_TEXT_PROPERTIES)
 stfs f1, 0x24(REG_TEXT_STRUCT)
 stfs f1, 0x28(REG_TEXT_STRUCT)
 
+bl NATIVE_EXTRA_TEXT_PROPERTIES
+mflr r24
+lbz r25, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+
 # Initialize header
 mr r3, REG_TEXT_STRUCT
 addi r4, REG_TEXT_PROPERTIES, TPO_COLOR_WHITE
@@ -305,6 +312,11 @@ li r5, 0
 lfs f1, TPO_HEADER_SIZE(REG_TEXT_PROPERTIES)
 lfs f2, TPO_HEADER_X(REG_TEXT_PROPERTIES)
 lfs f3, TPO_HEADER_Y(REG_TEXT_PROPERTIES)
+cmpwi r25, 0
+beq HEADER_Y_READY
+lfs f0, 4(r24)
+fadds f3, f3, f0
+HEADER_Y_READY:
 addi r7, REG_TEXT_PROPERTIES, TPO_EMPTY_STRING
 branchl r12, FG_CreateSubtext
 
@@ -372,11 +384,8 @@ lfs f3, TPO_ERR_LINE4_Y(REG_TEXT_PROPERTIES)
 bl INIT_ERROR_LINE_SUBTEXT
 
 # Append native-only rows, keeping every stock Slippi subtext index intact.
-lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
-cmpwi r3, 0
+cmpwi r25, 0
 beq NATIVE_EXTRA_TEXT_DONE
-bl NATIVE_EXTRA_TEXT_PROPERTIES
-mflr r24
 lfs f3, 0(r24)
 bl INIT_LINE_SUBTEXT # 15: fourth player; 16: its spinner
 NATIVE_EXTRA_TEXT_DONE:
@@ -391,6 +400,11 @@ b EXIT
 INIT_LINE_SUBTEXT:
 .set SP_OFST_Y_POS, BKP_FREE_SPACE_OFFSET
 backup
+cmpwi r25, 0
+beq INIT_LINE_SUBTEXT_Y_READY
+lfs f0, 4(r24)
+fadds f3, f3, f0
+INIT_LINE_SUBTEXT_Y_READY:
 stfs f3, SP_OFST_Y_POS(sp)
 
 # Init line text
@@ -422,6 +436,11 @@ blr
 ################################################################################
 INIT_ERROR_LINE_SUBTEXT:
 backup
+cmpwi r25, 0
+beq INIT_ERROR_LINE_Y_READY
+lfs f0, 4(r24)
+fadds f3, f3, f0
+INIT_ERROR_LINE_Y_READY:
 
 # Init line text
 mr r3, REG_TEXT_STRUCT
@@ -501,6 +520,39 @@ addi r5, REG_TEXT_PROPERTIES, TPO_EMPTY_STRING
 bl FN_UPDATE_TEXT
 li r3, 0
 stb r3, CSSDT_SPINNER4(REG_CSSDT_ADDR)
+lbz r3, CSSDT_NATIVE_INITIALIZED(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq NATIVE_COUNT_TEXT_DONE
+li r20, 0
+lbz r23, CSSDT_NATIVE_VISIBLE_COUNT(REG_CSSDT_ADDR)
+NATIVE_CARD_PORT_REFRESH_LOOP:
+cmpw r20, r23
+bge NATIVE_COUNT_TEXT_DONE
+slwi r4, r20, 2
+addi r3, REG_CSSDT_ADDR, CSSDT_CARD_PORT_TEXTS
+lwzx r21, r3, r4
+cmpwi r21, 0
+beq NATIVE_CARD_PORT_REFRESH_NEXT
+addi r3, r20, CSSDT_LOCAL_TEAMS_STATUS + LTS_PORTS
+lbzx r22, REG_CSSDT_ADDR, r3
+cmplwi r22, 4
+blt NATIVE_CARD_PORT_VALUE_READY
+mr r22, r20
+NATIVE_CARD_PORT_VALUE_READY:
+addi r22, r22, 1
+addi r3, REG_CSSDT_ADDR, CSSDT_CARD_PORT_CACHE
+lbzx r4, r3, r20
+cmpw r4, r22
+beq NATIVE_CARD_PORT_REFRESH_NEXT
+stbx r22, r3, r20
+mr r3, r21
+li r4, 0
+addi r5, REG_TEXT_PROPERTIES, TPO_NATIVE_CARD_PORT_FMT
+mr r6, r22
+branchl r12, Text_UpdateSubtextContents
+NATIVE_CARD_PORT_REFRESH_NEXT:
+addi r20, r20, 1
+b NATIVE_CARD_PORT_REFRESH_LOOP
 NATIVE_COUNT_TEXT_DONE:
 
 ################################################################################
