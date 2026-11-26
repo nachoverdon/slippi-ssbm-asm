@@ -31,7 +31,7 @@ blrl
 .set CTD_CARD_SCALES, 16
 .float 1.0, 1.0, 0.70, 0.53
 .set CTD_ORIG_CENTERS, 32
-.float -28.3, -12.9, 2.5, 17.9
+.float -23.1, -7.7, 7.7, 23.1
 .set CTD_HALF_REF_BOX, 48
 .float 4.64
 .set CTD_ANCHOR_Y, 52
@@ -72,13 +72,21 @@ blrl
 .float 0.0, -2.0
 .float 0.0, 2.0
 .float 0.0, 0.0
-.set CTD_COLOR_PORT, 168
+.set CTD_CURSOR_OFF_X, 168
+.float -5.0
+.set CTD_CURSOR_OFF_Y, 172
+.float 1.25
+.set CTD_CARD_HALF_W, 176
+.float 7.25
+.set CTD_FALLBACK_ANCHOR_TY, 180
+.float 3.4
+.set CTD_COLOR_PORT, 184
 .long 0x00000078
-.set CTD_COLOR_BLACK, 172
+.set CTD_COLOR_BLACK, 188
 .long 0x000000FF
-.set CTD_COLOR_WHITE, 176
+.set CTD_COLOR_WHITE, 192
 .long 0xFFFFFFFF
-.set CTD_STR_EMPTY, 180
+.set CTD_STR_EMPTY, 196
 .string ""
 .set CTD_STR_PORT_FMT, CTD_STR_EMPTY + 1
 .string "P%d"
@@ -259,6 +267,7 @@ stw r3, 0x14(r29)
 stw r3, 0x18(r29)
 lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 1(r28)
 subi r3, r3, 1
+mr r6, r3
 slwi r4, r3, 2
 addi r4, r4, CTD_CARD_SCALES
 lfsx f29, r25, r4
@@ -278,21 +287,41 @@ beq NATIVE_FALLBACK_CENTER
 lfs f28, 0x00(r3)
 lfs f30, CTD_HALF_REF_BOX(r25)
 fadds f28, f28, f30
+lfs f25, 0x04(r3)
+lfs f30, CTD_ANCHOR_TY_OFF(r25)
+fadds f25, f25, f30
 b NATIVE_CENTER_READY
 NATIVE_FALLBACK_CENTER:
 slwi r4, r30, 2
 addi r4, r4, CTD_ORIG_CENTERS
 lfsx f28, r25, r4
+lfs f25, CTD_FALLBACK_ANCHOR_TY(r25)
 NATIVE_CENTER_READY:
 fadds f26, f28, f31
-lfs f30, 0x1c(r29)
-fsubs f30, f30, f28
-fmadds f30, f29, f30, f26
-stfs f30, 0x1c(r29)
-lfs f30, 0x20(r29)
-fsubs f30, f30, f28
-fmadds f30, f29, f30, f26
-stfs f30, 0x20(r29)
+lfs f30, CTD_CURSOR_OFF_X(r25)
+fadds f26, f26, f30 # cursor_cx = new_world_cx - 5.0
+lfs f30, CTD_CARD_HALF_W(r25)
+fmuls f30, f30, f29 # half_w = 7.25 * card_scale
+fsubs f27, f26, f30
+stfs f27, 0x1c(r29)
+fadds f27, f26, f30
+stfs f27, 0x20(r29)
+slwi r4, r6, 2
+addi r4, r4, CTD_PORT_Y_OFFS
+lfsx f30, r25, r4
+fadds f30, f25, f30
+fneg f30, f30
+lfs f27, CTD_CURSOR_OFF_Y(r25)
+fadds f30, f30, f27 # top_y = -(anchor_ty + port_y_off) + 1.25
+slwi r4, r30, 2
+addi r5, r28, CSSDT_NATIVE_TEAM_TOP_Y
+stfsx f30, r5, r4
+lfs f30, CTD_NAME_REL_Y(r25)
+fmadds f30, f29, f30, f25
+fneg f30, f30
+fadds f30, f30, f27 # bot_y = -(anchor_ty + 14.24 * scale) + 1.25
+addi r5, r28, CSSDT_NATIVE_TEAM_BOT_Y
+stfsx f30, r5, r4
 # Preserve existing on-screen hands across roster reloads; spawn new/unclaimed
 # local hands on their own moved team markers, including P1 on fresh entry.
 load r3, 0x804A0BC0

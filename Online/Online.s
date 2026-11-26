@@ -495,7 +495,9 @@
 .set CSSDT_NATIVE_ORIGINAL_SY, CSSDT_NATIVE_ORIGINAL_SX + 48  # 0x250, f32[12]
 .set CSSDT_NATIVE_PIVOT_DX, CSSDT_NATIVE_ORIGINAL_SY + 48     # 0x280, f32[12] (world_x - card_cx)
 .set CSSDT_NATIVE_PIVOT_DY, CSSDT_NATIVE_PIVOT_DX + 48        # 0x2B0, f32[12] (world_y - (-3.4))
-.set CSSDT_SIZE, CSSDT_NATIVE_PIVOT_DY + 48                   # 0x2E0
+.set CSSDT_NATIVE_TEAM_TOP_Y, CSSDT_NATIVE_PIVOT_DY + 48      # 0x2E0, f32[4]
+.set CSSDT_NATIVE_TEAM_BOT_Y, CSSDT_NATIVE_TEAM_TOP_Y + 16    # 0x2F0, f32[4]
+.set CSSDT_SIZE, CSSDT_NATIVE_TEAM_BOT_Y + 16                 # 0x300
 
 ################################################################################
 # CSS Chat Message Data Table

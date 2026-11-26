@@ -28,7 +28,27 @@ mulli r12, r12, 36
 load r11, 0x803F0DFC
 add r12, r12, r11
 cmpw r12, r25 # this cursor can only change its own team
-beq EXIT
+bne SKIP_TEAM_CHANGE
+lfs f1, 0x0c(r31)
+lfs f0, 0x1c(r25)
+fcmpo cr0, f1, f0
+ble SKIP_TEAM_CHANGE
+lfs f0, 0x20(r25)
+fcmpo cr0, f1, f0
+bge SKIP_TEAM_CHANGE
+loadwz r12, CSSDT_BUF_ADDR
+lbz r11, 4(r31)
+slwi r11, r11, 2
+addi r12, r12, CSSDT_NATIVE_TEAM_TOP_Y
+lfsx f0, r12, r11
+lfs f1, 0x10(r31)
+fcmpo cr0, f1, f0
+bge SKIP_TEAM_CHANGE
+addi r12, r12, CSSDT_NATIVE_TEAM_BOT_Y - CSSDT_NATIVE_TEAM_TOP_Y
+lfsx f0, r12, r11
+fcmpo cr0, f1, f0
+ble SKIP_TEAM_CHANGE
+branch r12, 0x80261BBC # full card hitbox matched; cycle team without snapping cursor Y
 SKIP_TEAM_CHANGE:
 branch r12, 0x80261BFC
 EXIT:
